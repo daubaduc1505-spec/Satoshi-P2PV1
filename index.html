@@ -24,9 +24,15 @@
         .big-countdown { text-align: center; margin-bottom: 20px; border: 3px solid var(--green); padding: 20px; }
         .timer-val { font-size: clamp(1.5rem, 4vw, 3.5rem); font-weight: 900; text-shadow: 0 0 15px var(--green); }
 
-        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px; }
         .stat-card { text-align: center; border: 1px solid var(--green); padding: 10px; }
         .stat-card span { font-size: 1.5rem; display: block; font-weight: 900; color: #fff; text-shadow: 0 0 10px var(--green); }
+
+        /* MỚI: Bonding Curve Style */
+        .bonding-panel { margin-bottom: 20px; }
+        .progress-container { width: 100%; background: #112211; height: 20px; border: 1px solid var(--green); margin-top: 10px; position: relative; }
+        #progress-bar { width: 0%; height: 100%; background: var(--green); box-shadow: 0 0 10px var(--green); transition: width 2s ease-in-out; }
+        #progress-text { position: absolute; width: 100%; text-align: center; top: 0; font-size: 0.8rem; font-weight: bold; color: #fff; line-height: 20px; text-shadow: 1px 1px #000; }
 
         .live-feed { height: 350px; overflow-y: hidden; font-size: 0.8rem; font-family: monospace; border-top: 1px solid #113311; padding-top: 10px; }
         .buy { color: #00ff00; } .sell { color: #ff0000; }
@@ -67,6 +73,17 @@
                 <div class="panel stat-card">
                     TOTAL HOLDERS
                     <span id="holder-count">0</span>
+                </div>
+            </div>
+
+            <div class="panel bonding-panel">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                    <span>BONDING CURVE PROGRESS</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="progress-container">
+                    <div id="progress-bar"></div>
+                    <div id="progress-text">MIGRATING TO RAYDIUM AT $69,000 MC</div>
                 </div>
             </div>
 
@@ -128,7 +145,7 @@
         }
         setInterval(drawMatrix, 35);
 
-        // --- 2. Countdown April 5 ---
+        // --- 2. Countdown ---
         const targetDate = new Date("April 5, 2026 00:00:00").getTime();
         setInterval(() => {
             const now = new Date().getTime();
@@ -156,7 +173,7 @@
             }
         }
 
-        // --- 4. Live Feed Simulation ---
+        // --- 4. Live Feed ---
         const feed = document.getElementById("trade-feed");
         function addTrade() {
             const isBuy = Math.random() > 0.4;
@@ -169,7 +186,7 @@
         }
         setInterval(addTrade, 1500);
 
-        // --- 5. Real-time API Bridge (Nhảy số Ting Ting) ---
+        // --- 5. API Bridge & Animate ---
         function animateValue(id, start, end, duration, isCurrency = false) {
             const obj = document.getElementById(id);
             if (!obj) return;
@@ -177,17 +194,15 @@
             const step = (timestamp) => {
                 if (!startTimestamp) startTimestamp = timestamp;
                 const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                const current = Math.floor(progress * (end - start) + start);
+                const current = (progress * (end - start) + start);
                 
                 if (isCurrency) {
-                    obj.innerHTML = '$' + current.toLocaleString();
+                    obj.innerHTML = '$' + current.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 } else {
-                    obj.innerHTML = current.toLocaleString();
+                    obj.innerHTML = Math.floor(current).toLocaleString();
                 }
                 
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
+                if (progress < 1) window.requestAnimationFrame(step);
             };
             window.requestAnimationFrame(step);
         }
@@ -200,27 +215,33 @@
                 const response = await fetch('http://localhost:5000/api/stats');
                 const data = await response.json();
                 
+                // 1. Cập nhật Holders
                 const newHolders = data.holders;
-                const newMCap = parseFloat(data.market_cap.replace(/,/g, ''));
-
-                // Hiệu ứng nhảy số cho Holders
                 if (newHolders !== currentHolders) {
                     animateValue("holder-count", currentHolders, newHolders, 1000);
                     currentHolders = newHolders;
                 }
 
-                // Hiệu ứng nhảy số cho Market Cap
-                if (newMCap !== currentMCap) {
-                    animateValue("mc-val", currentMCap, newMCap, 1500, true);
-                    currentMCap = newMCap;
+                // 2. Cập nhật Market Cap (Xử lý chuỗi từ API)
+                const rawMCap = typeof data.market_cap === 'string' ? parseFloat(data.market_cap.replace(/[^0-9.]/g, '')) : data.market_cap;
+                if (rawMCap !== currentMCap) {
+                    animateValue("mc-val", currentMCap, rawMCap, 1500, true);
+                    currentMCap = rawMCap;
                 }
+
+                // 3. Cập nhật Bonding Curve (Giả sử đích là 69,000 USD trên Pump.fun)
+                const targetMC = 69000;
+                let percent = (rawMCap / targetMC) * 100;
+                if (percent > 100) percent = 100;
+                document.getElementById('progress-bar').style.width = percent + '%';
+                document.getElementById('progress-percent').innerText = percent.toFixed(2) + '%';
+
             } catch (err) {
                 console.log("Waiting for Protocol Connection...");
             }
         }
 
-        // Cập nhật mỗi 10 giây cho mượt
-        setInterval(updateStatsFromProtocol, 10000);
+        setInterval(updateStatsFromProtocol, 5000); // 5 giây cập nhật 1 lần
         updateStatsFromProtocol();
 
         // Epoch Timer
